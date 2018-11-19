@@ -4,16 +4,18 @@
 NODES   = 3
 NODEMEM = "1024"
 SSHKEY  = "~/.ssh/id_rsa.pub"
+PRIVATE_SSHKEY = "~/.ssh/id_rsa"
 # Overwrite host locale in ssh session
 ENV["LC_ALL"] = "en_US.UTF-8"
 
 Vagrant.configure("2") do |config|
+  config.vm.box_download_insecure = true
   config.vm.provider "virtualbox"
   # This vagrant box is downloaded from https://vagrantcloud.com/centos/7
   # Other variants https://app.vagrantup.com/boxes/search
   config.vm.box = "centos/7"
 
-  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.synced_folder ".", "/vagrant", disabled: false
   if Vagrant.has_plugin?("vagrant-vbguest")
     config.vbguest.auto_update = false
   end
@@ -22,6 +24,21 @@ Vagrant.configure("2") do |config|
   config.vm.provision "file", source: SSHKEY, destination: "~/.ssh/me.pub"
   config.vm.provision "shell", inline: "cat ~vagrant/.ssh/me.pub >> ~vagrant/.ssh/authorized_keys"
   # host to run ansible tower, not provisioned by default
+
+  config.vm.define "ansible", autostart: true do |machine|
+    machine.vm.hostname = "ansible"
+    machine.vm.network :private_network, ip: "10.42.0.3"
+    machine.vm.provision "file", source: PRIVATE_SSHKEY, destination: "~/.ssh/id_rsa"
+    machine.vm.provider :virtualbox do |vb|
+      vb.customize [
+        "modifyvm", :id,
+        "--name", "ansible",
+        "--memory", "512",
+        "--cpus", 1
+      ]
+    end
+  end
+
   config.vm.define "ansible-tower", autostart: false do |machine|
     machine.vm.hostname = "ansible-tower"
     machine.vm.network :private_network, ip: "10.42.0.2"
